@@ -1,5 +1,6 @@
 providers:
   docker:
     endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false # NOTE: traefik.enable=trueのコンテナだけを対象にする
 api:
   insecure: true
