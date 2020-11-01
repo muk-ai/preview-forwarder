@@ -16,4 +16,8 @@ services:
 
 networks:
   web:
+    # NOTE:
+    # コンテナを立ち上げる際にこの名前のnetworkに所属させる
+    # そうしないと、traefikがフォワーディングできない。
+    name: docker.internal
     driver: bridge
