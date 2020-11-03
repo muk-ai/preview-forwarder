@@ -12,6 +12,18 @@ services:
       - ./traefik/traefik.yml:/etc/traefik/traefik.yml
     networks:
       - web
+  container-launcher:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "80"
+    networks:
+      - web
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.catch-all.rule=HostRegexp(`{host:.+}`)"
+      - "traefik.http.routers.catch-all.priority=0"
 
 networks:
   web:
