@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  traefik:
+    image: traefik:v2.3.2
+    ports:
+      - "80:80"
+      - "8080:8080"
+    volumes:
+      # So that Traefik can listen to the Docker events
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml
+    networks:
+      - web
+
+networks:
+  web:
+    # NOTE:
+    # コンテナを立ち上げる際にこの名前のnetworkに所属させる
+    # そうしないと、traefikがフォワーディングできない。
+    name: docker.internal
+    driver: bridge
