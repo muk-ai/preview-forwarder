@@ -4,3 +4,5 @@ providers:
     exposedByDefault: false # NOTE: traefik.enable=trueのコンテナだけを対象にする
 api:
   insecure: true
+log:
+  level: DEBUG
