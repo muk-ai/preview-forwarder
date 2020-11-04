@@ -23,7 +23,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.catch-all.rule=HostRegexp(`{host:.+}`)"
-      - "traefik.http.routers.catch-all.priority=0"
+      - "traefik.http.routers.catch-all.priority=10"
 
 networks:
   web:
