@@ -17,4 +17,11 @@ RUN cargo build --release
 FROM debian:10.6-slim
 
 COPY --from=builder /app/target/release/preview-forwarder /app/target/release/preview-forwarder
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
+  && apt-get -y clean \
+  && rm -rf /var/lib/apt/lists/*
+RUN curl -fsSL https://get.docker.com/ | sh
 CMD ROCKET_PORT=80 /app/target/release/preview-forwarder

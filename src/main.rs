@@ -1,4 +1,5 @@
 #![feature(proc_macro_hygiene, decl_macro)]
+use std::process::Command;
 
 #[macro_use] extern crate rocket;
 use rocket::request::{FromRequest, Outcome, Request};
@@ -17,6 +18,11 @@ impl<'a, 'r> FromRequest<'a, 'r> for HostHeader {
 
 #[get("/")]
 fn index(host: HostHeader) -> String {
+    Command::new("docker")
+        .arg("run")
+        .arg("hello-world")
+        .spawn()
+        .expect("docker command failed");
     format!("Host is {}", host.0)
 }
 
