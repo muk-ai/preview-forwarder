@@ -1,5 +1,7 @@
 #![feature(proc_macro_hygiene, decl_macro)]
 use std::process::Command;
+use std::env;
+use dotenv::dotenv;
 
 #[macro_use] extern crate rocket;
 use rocket::request::{FromRequest, Outcome, Request};
@@ -27,5 +29,13 @@ fn index(host: HostHeader) -> String {
 }
 
 fn main() {
+    dotenv().ok();
+    let registry = env::var("DOCKER_REGISTRY").expect("environment variable DOCKER_REGISTRY is not defined");
+    let repository = env::var("DOCKER_REPOSITORY").expect("environment variable DOCKER_REPOSITORY is not defined");
+    let port = env::var("DOCKER_PORT").expect("environment variable DOCKER_PORT is not defined");
+    println!("{}", registry);
+    println!("{}", repository);
+    println!("{}", port);
+
     rocket::ignite().mount("/", routes![index]).launch();
 }
