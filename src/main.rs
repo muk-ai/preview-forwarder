@@ -2,7 +2,7 @@
 use std::process::Command;
 use std::env;
 use dotenv::dotenv;
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 
 #[macro_use] extern crate rocket;
 use rocket::request::{FromRequest, Outcome, Request};
@@ -28,11 +28,9 @@ impl Config {
         }
     }
 }
-lazy_static! {
-    static ref CONFIG: Config = {
-        Config::from_env()
-    };
-}
+static CONFIG: Lazy<Config> = Lazy::new(|| {
+    Config::from_env()
+});
 
 struct HostHeader(pub String);
 impl<'a, 'r> FromRequest<'a, 'r> for HostHeader {
