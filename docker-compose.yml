@@ -26,6 +26,8 @@ services:
       - "traefik.http.routers.catch-all.priority=10"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+    env_file:
+      - .env
 
 networks:
   web:
