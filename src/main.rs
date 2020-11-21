@@ -6,6 +6,7 @@ use lazy_static::lazy_static;
 
 #[macro_use] extern crate rocket;
 use rocket::request::{FromRequest, Outcome, Request};
+use rocket::response::status;
 
 #[derive(Debug)]
 struct Config {
@@ -46,19 +47,62 @@ impl<'a, 'r> FromRequest<'a, 'r> for HostHeader {
 }
 
 #[get("/")]
-fn index(host: HostHeader) -> String {
-    Command::new("docker")
+fn index(host: HostHeader) -> Result<String, status::NotFound<&'static str>> {
+    let tag = get_subdomain(&host)?;
+    let image = format!("{}/{}:{}", CONFIG.registry, CONFIG.repository, tag);
+
+    let output = Command::new("docker")
+        .args(&["image", "inspect", &image])
+        .output()
+        .expect("error1");
+    if !output.status.success() {
+        let output = Command::new("docker")
+            .args(&["run", "--rm", "amazon/aws-cli", "ecr", "get-login-password", "--region", "ap-northeast-1"])
+            .output()
+            .expect("error1");
+        if !output.status.success() {
+            return Ok("aws ecr get-login-password failed".to_string());
+        }
+        let password = std::str::from_utf8(&output.stdout).unwrap();
+        let output = Command::new("docker")
+            .args(&["login", "--username", "AWS", "--password", password, &CONFIG.registry])
+            .output()
+            .expect("error1");
+        if !output.status.success() {
+            return Ok("docker login failed".to_string());
+        }
+        let output = Command::new("docker")
+            .args(&["pull", &image])
+            .output()
+            .expect("error1");
+        if output.status.success() {
+            return Ok("Image successfully pulled".to_string());
+        } else {
+            return Ok(std::str::from_utf8(&output.stderr).unwrap().to_string());
+        }
+    }
+
+    let _output = Command::new("docker")
         .arg("run")
-        .arg("hello-world")
+        .args(&["-p", &CONFIG.port.to_string()])
+        .args(&["--net", "docker.internal"])
+        .args(&["--label", "traefik.enable=true"])
+        .args(&["--label", &format!("traefik.http.routers.{}.rule=Host(`{}`)", tag, host.0)])
+        .args(&["--label", &format!("traefik.http.routers.{}.priority=50", tag)])
+        .arg(&image)
         .spawn()
-        .expect("docker command failed");
-    format!("Host is {}", host.0)
+        .expect("error1");
+    Ok("container launched".to_string())
+}
+
+fn get_subdomain(host: &HostHeader) -> Result<String, status::NotFound<&'static str>> {
+    let list: Vec<&str> = host.0.split('.').collect();
+    match list.get(0) {
+        Some(s) => Ok(s.to_string()),
+        None => Err(status::NotFound("couldn't find subdomain"))
+    }
 }
 
 fn main() {
-    println!("{}", CONFIG.registry);
-    println!("{}", CONFIG.repository);
-    println!("{}", CONFIG.port);
-
     rocket::ignite().mount("/", routes![index]).launch();
 }
