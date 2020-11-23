@@ -1,10 +1,11 @@
 #![feature(proc_macro_hygiene, decl_macro)]
-use std::process::Command;
-use std::env;
 use dotenv::dotenv;
 use once_cell::sync::Lazy;
+use std::env;
+use std::process::Command;
 
-#[macro_use] extern crate rocket;
+#[macro_use]
+extern crate rocket;
 use rocket::request::{FromRequest, Outcome, Request};
 use rocket::response::status;
 
@@ -17,20 +18,21 @@ struct Config {
 impl Config {
     fn from_env() -> Config {
         dotenv().ok();
-        let registry = env::var("DOCKER_REGISTRY").expect("environment variable DOCKER_REGISTRY is not defined");
-        let repository = env::var("DOCKER_REPOSITORY").expect("environment variable DOCKER_REPOSITORY is not defined");
-        let port = env::var("DOCKER_PORT").expect("environment variable DOCKER_PORT is not defined");
+        let registry = env::var("DOCKER_REGISTRY")
+            .expect("environment variable DOCKER_REGISTRY is not defined");
+        let repository = env::var("DOCKER_REPOSITORY")
+            .expect("environment variable DOCKER_REPOSITORY is not defined");
+        let port =
+            env::var("DOCKER_PORT").expect("environment variable DOCKER_PORT is not defined");
         let port: u16 = port.parse().unwrap();
         Config {
             registry,
             repository,
-            port
+            port,
         }
     }
 }
-static CONFIG: Lazy<Config> = Lazy::new(|| {
-    Config::from_env()
-});
+static CONFIG: Lazy<Config> = Lazy::new(|| Config::from_env());
 
 struct HostHeader(pub String);
 impl<'a, 'r> FromRequest<'a, 'r> for HostHeader {
@@ -55,7 +57,15 @@ fn index(host: HostHeader) -> Result<String, status::NotFound<&'static str>> {
         .expect("error1");
     if !output.status.success() {
         let output = Command::new("docker")
-            .args(&["run", "--rm", "amazon/aws-cli", "ecr", "get-login-password", "--region", "ap-northeast-1"])
+            .args(&[
+                "run",
+                "--rm",
+                "amazon/aws-cli",
+                "ecr",
+                "get-login-password",
+                "--region",
+                "ap-northeast-1",
+            ])
             .output()
             .expect("error1");
         if !output.status.success() {
@@ -63,7 +73,14 @@ fn index(host: HostHeader) -> Result<String, status::NotFound<&'static str>> {
         }
         let password = std::str::from_utf8(&output.stdout).unwrap();
         let output = Command::new("docker")
-            .args(&["login", "--username", "AWS", "--password", password, &CONFIG.registry])
+            .args(&[
+                "login",
+                "--username",
+                "AWS",
+                "--password",
+                password,
+                &CONFIG.registry,
+            ])
             .output()
             .expect("error1");
         if !output.status.success() {
@@ -85,8 +102,14 @@ fn index(host: HostHeader) -> Result<String, status::NotFound<&'static str>> {
         .args(&["-p", &CONFIG.port.to_string()])
         .args(&["--net", "docker.internal"])
         .args(&["--label", "traefik.enable=true"])
-        .args(&["--label", &format!("traefik.http.routers.{}.rule=Host(`{}`)", tag, host.0)])
-        .args(&["--label", &format!("traefik.http.routers.{}.priority=50", tag)])
+        .args(&[
+            "--label",
+            &format!("traefik.http.routers.{}.rule=Host(`{}`)", tag, host.0),
+        ])
+        .args(&[
+            "--label",
+            &format!("traefik.http.routers.{}.priority=50", tag),
+        ])
         .arg(&image)
         .spawn()
         .expect("error1");
@@ -97,7 +120,7 @@ fn get_subdomain(host: &HostHeader) -> Result<String, status::NotFound<&'static 
     let list: Vec<&str> = host.0.split('.').collect();
     match list.get(0) {
         Some(s) => Ok(s.to_string()),
-        None => Err(status::NotFound("couldn't find subdomain"))
+        None => Err(status::NotFound("couldn't find subdomain")),
     }
 }
 
