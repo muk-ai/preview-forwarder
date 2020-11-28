@@ -51,6 +51,9 @@ impl<'a, 'r> FromRequest<'a, 'r> for HostHeader {
 fn index(host: HostHeader) -> Result<String, status::Custom<String>> {
     let tag = get_subdomain(&host)?;
     let image = format!("{}/{}:{}", CONFIG.registry, CONFIG.repository, tag);
+    if cfg!(debug_assertions) {
+        dbg!(&image);
+    }
 
     let inspect = docker_image_inspect(&image)?;
     if !inspect.status.success() {
@@ -62,6 +65,10 @@ fn index(host: HostHeader) -> Result<String, status::Custom<String>> {
 }
 
 fn get_subdomain(host: &HostHeader) -> Result<String, status::Custom<String>> {
+    if cfg!(debug_assertions) {
+        dbg!(&host.0);
+    }
+
     let list: Vec<&str> = host.0.split('.').collect();
     match list.get(0) {
         Some(s) => Ok(s.to_string()),
@@ -195,5 +202,10 @@ fn docker_run_image(
 }
 
 fn main() {
+    if cfg!(debug_assertions) {
+        dbg!(&CONFIG.registry);
+        dbg!(&CONFIG.repository);
+        dbg!(CONFIG.port);
+    }
     rocket::ignite().mount("/", routes![index]).launch();
 }
