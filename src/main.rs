@@ -1,8 +1,8 @@
 #![feature(proc_macro_hygiene, decl_macro)]
 use dotenv::dotenv;
 use once_cell::sync::Lazy;
-use std::env;
 use std::process::Command;
+use std::{env, process::Output};
 
 #[macro_use]
 extern crate rocket;
@@ -52,63 +52,123 @@ fn index(host: HostHeader) -> Result<String, status::Custom<String>> {
     let tag = get_subdomain(&host)?;
     let image = format!("{}/{}:{}", CONFIG.registry, CONFIG.repository, tag);
 
-    let output = Command::new("docker")
-        .args(&["image", "inspect", &image])
-        .output()
-        .expect("error1");
-    if !output.status.success() {
-        let output = Command::new("docker")
-            .args(&[
-                "run",
-                "--rm",
-                "amazon/aws-cli",
-                "ecr",
-                "get-login-password",
-                "--region",
-                "ap-northeast-1",
-            ])
-            .output()
-            .expect("error1");
-        if !output.status.success() {
-            return Err(status::Custom(
-                Status::InternalServerError,
-                "aws ecr get-login-password failed".to_string(),
-            ));
-        }
-        let password = std::str::from_utf8(&output.stdout).unwrap();
-        let output = Command::new("docker")
-            .args(&[
-                "login",
-                "--username",
-                "AWS",
-                "--password",
-                password,
-                &CONFIG.registry,
-            ])
-            .output()
-            .expect("error1");
-        if !output.status.success() {
-            return Err(status::Custom(
-                Status::InternalServerError,
-                "docker login failed".to_string(),
-            ));
-        }
-        let output = Command::new("docker")
-            .args(&["pull", &image])
-            .output()
-            .expect("error1");
-        if output.status.success() {
-            return Ok("Image successfully pulled".to_string());
-        } else {
-            let message = format!(
-                "docker pull failed: {}",
-                std::str::from_utf8(&output.stderr).unwrap()
-            );
-            return Err(status::Custom(Status::InternalServerError, message));
-        }
+    let inspect = docker_image_inspect(&image)?;
+    if !inspect.status.success() {
+        docker_login()?;
+        return docker_pull_image(&image);
     }
 
-    let _output = Command::new("docker")
+    return docker_run_image(host, tag, image);
+}
+
+fn get_subdomain(host: &HostHeader) -> Result<String, status::Custom<String>> {
+    let list: Vec<&str> = host.0.split('.').collect();
+    match list.get(0) {
+        Some(s) => Ok(s.to_string()),
+        None => Err(status::Custom(
+            Status::NotFound,
+            "couldn't find subdomain".to_string(),
+        )),
+    }
+}
+
+fn docker_image_inspect(image: &String) -> Result<Output, status::Custom<String>> {
+    let result = Command::new("docker")
+        .args(&["image", "inspect", image])
+        .output();
+    match result {
+        Ok(o) => Ok(o),
+        Err(_) => Err(status::Custom(
+            Status::InternalServerError,
+            "docker image inspect: failed".to_string(),
+        )),
+    }
+}
+
+fn docker_login() -> Result<(), status::Custom<String>> {
+    let result = Command::new("docker")
+        .args(&[
+            "run",
+            "--rm",
+            "amazon/aws-cli",
+            "ecr",
+            "get-login-password",
+            "--region",
+            "ap-northeast-1",
+        ])
+        .output();
+    let output = match result {
+        Ok(o) => o,
+        Err(_) => {
+            return Err(status::Custom(
+                Status::InternalServerError,
+                "aws ecr get-login-password: failed".to_string(),
+            ))
+        }
+    };
+    if !output.status.success() {
+        return Err(status::Custom(
+            Status::InternalServerError,
+            "aws ecr get-login-password: failed".to_string(),
+        ));
+    }
+    let password = std::str::from_utf8(&output.stdout).unwrap();
+    let result = Command::new("docker")
+        .args(&[
+            "login",
+            "--username",
+            "AWS",
+            "--password",
+            password,
+            &CONFIG.registry,
+        ])
+        .output();
+    let output = match result {
+        Ok(o) => o,
+        Err(_) => {
+            return Err(status::Custom(
+                Status::InternalServerError,
+                "docker login: failed".to_string(),
+            ))
+        }
+    };
+    if !output.status.success() {
+        return Err(status::Custom(
+            Status::InternalServerError,
+            "docker login failed".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn docker_pull_image(image: &String) -> Result<String, status::Custom<String>> {
+    let result = Command::new("docker").args(&["pull", &image]).output();
+    let output = match result {
+        Ok(o) => o,
+        Err(_) => {
+            return Err(status::Custom(
+                Status::InternalServerError,
+                "docker pull: failed".to_string(),
+            ))
+        }
+    };
+    if output.status.success() {
+        return Ok("Image successfully pulled".to_string());
+    } else {
+        let message = format!(
+            "docker pull: failed -> {}",
+            std::str::from_utf8(&output.stderr).unwrap()
+        );
+        return Err(status::Custom(Status::InternalServerError, message));
+    }
+}
+
+fn docker_run_image(
+    host: HostHeader,
+    tag: String,
+    image: String,
+) -> Result<String, status::Custom<String>> {
+    let result = Command::new("docker")
         .arg("run")
         .args(&["-p", &CONFIG.port.to_string()])
         .args(&["--net", "docker.internal"])
@@ -122,19 +182,15 @@ fn index(host: HostHeader) -> Result<String, status::Custom<String>> {
             &format!("traefik.http.routers.{}.priority=50", tag),
         ])
         .arg(&image)
-        .spawn()
-        .expect("error1");
-    Ok("container launched".to_string())
-}
-
-fn get_subdomain(host: &HostHeader) -> Result<String, status::Custom<String>> {
-    let list: Vec<&str> = host.0.split('.').collect();
-    match list.get(0) {
-        Some(s) => Ok(s.to_string()),
-        None => Err(status::Custom(
-            Status::NotFound,
-            "couldn't find subdomain".to_string(),
-        )),
+        .spawn();
+    match result {
+        Ok(_) => Ok("container launched".to_string()),
+        Err(_) => {
+            return Err(status::Custom(
+                Status::InternalServerError,
+                "docker run: failed".to_string(),
+            ))
+        }
     }
 }
 
