@@ -6,6 +6,7 @@ use std::process::Command;
 
 #[macro_use]
 extern crate rocket;
+use rocket::http::Status;
 use rocket::request::{FromRequest, Outcome, Request};
 use rocket::response::status;
 
@@ -47,7 +48,7 @@ impl<'a, 'r> FromRequest<'a, 'r> for HostHeader {
 }
 
 #[get("/")]
-fn index(host: HostHeader) -> Result<String, status::NotFound<&'static str>> {
+fn index(host: HostHeader) -> Result<String, status::Custom<String>> {
     let tag = get_subdomain(&host)?;
     let image = format!("{}/{}:{}", CONFIG.registry, CONFIG.repository, tag);
 
@@ -69,7 +70,10 @@ fn index(host: HostHeader) -> Result<String, status::NotFound<&'static str>> {
             .output()
             .expect("error1");
         if !output.status.success() {
-            return Ok("aws ecr get-login-password failed".to_string());
+            return Err(status::Custom(
+                Status::InternalServerError,
+                "aws ecr get-login-password failed".to_string(),
+            ));
         }
         let password = std::str::from_utf8(&output.stdout).unwrap();
         let output = Command::new("docker")
@@ -84,7 +88,10 @@ fn index(host: HostHeader) -> Result<String, status::NotFound<&'static str>> {
             .output()
             .expect("error1");
         if !output.status.success() {
-            return Ok("docker login failed".to_string());
+            return Err(status::Custom(
+                Status::InternalServerError,
+                "docker login failed".to_string(),
+            ));
         }
         let output = Command::new("docker")
             .args(&["pull", &image])
@@ -93,7 +100,11 @@ fn index(host: HostHeader) -> Result<String, status::NotFound<&'static str>> {
         if output.status.success() {
             return Ok("Image successfully pulled".to_string());
         } else {
-            return Ok(std::str::from_utf8(&output.stderr).unwrap().to_string());
+            let message = format!(
+                "docker pull failed: {}",
+                std::str::from_utf8(&output.stderr).unwrap()
+            );
+            return Err(status::Custom(Status::InternalServerError, message));
         }
     }
 
@@ -116,11 +127,14 @@ fn index(host: HostHeader) -> Result<String, status::NotFound<&'static str>> {
     Ok("container launched".to_string())
 }
 
-fn get_subdomain(host: &HostHeader) -> Result<String, status::NotFound<&'static str>> {
+fn get_subdomain(host: &HostHeader) -> Result<String, status::Custom<String>> {
     let list: Vec<&str> = host.0.split('.').collect();
     match list.get(0) {
         Some(s) => Ok(s.to_string()),
-        None => Err(status::NotFound("couldn't find subdomain")),
+        None => Err(status::Custom(
+            Status::NotFound,
+            "couldn't find subdomain".to_string(),
+        )),
     }
 }
 
