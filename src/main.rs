@@ -41,15 +41,29 @@ impl<'a, 'r> FromRequest<'a, 'r> for HostHeader {
 
     fn from_request(request: &'a Request) -> Outcome<Self, Self::Error> {
         match request.headers().get_one("Host") {
-            Some(host) => Outcome::Success(HostHeader(host.to_string())),
+            Some(host) => match get_subdomain(host.to_string()) {
+                Ok(subdomain) => {
+                    if is_commit_hash_characters(subdomain) {
+                        Outcome::Success(HostHeader(host.to_string()))
+                    } else {
+                        Outcome::Forward(())
+                    }
+                }
+                Err(_) => Outcome::Forward(()),
+            },
             None => Outcome::Forward(()),
         }
     }
 }
 
+fn is_commit_hash_characters(host: String) -> bool {
+    host.chars()
+        .all(|c| ('0' <= c && c <= '9') || ('a' <= c && c <= 'f'))
+}
+
 #[get("/")]
-fn index(host: HostHeader) -> Result<String, status::Custom<String>> {
-    let tag = get_subdomain(&host)?;
+fn index_with_host_header(host: HostHeader) -> Result<String, status::Custom<String>> {
+    let tag = get_subdomain(host.0.clone())?;
     let image = format!("{}/{}:{}", CONFIG.registry, CONFIG.repository, tag);
     if cfg!(debug_assertions) {
         dbg!(&image);
@@ -61,15 +75,20 @@ fn index(host: HostHeader) -> Result<String, status::Custom<String>> {
         return docker_pull_image(&image);
     }
 
-    return docker_run_image(host, tag, image);
+    return docker_run_image(host.0, tag, image);
 }
 
-fn get_subdomain(host: &HostHeader) -> Result<String, status::Custom<String>> {
+#[get("/", rank = 2)]
+fn index() -> &'static str {
+    "Could you please specify a docker tag."
+}
+
+fn get_subdomain(host: String) -> Result<String, status::Custom<String>> {
     if cfg!(debug_assertions) {
-        dbg!(&host.0);
+        dbg!(&host);
     }
 
-    let list: Vec<&str> = host.0.split('.').collect();
+    let list: Vec<&str> = host.split('.').collect();
     match list.get(0) {
         Some(s) => Ok(s.to_string()),
         None => Err(status::Custom(
@@ -171,7 +190,7 @@ fn docker_pull_image(image: &String) -> Result<String, status::Custom<String>> {
 }
 
 fn docker_run_image(
-    host: HostHeader,
+    host: String,
     tag: String,
     image: String,
 ) -> Result<String, status::Custom<String>> {
@@ -182,7 +201,7 @@ fn docker_run_image(
         .args(&["--label", "traefik.enable=true"])
         .args(&[
             "--label",
-            &format!("traefik.http.routers.{}.rule=Host(`{}`)", tag, host.0),
+            &format!("traefik.http.routers.{}.rule=Host(`{}`)", tag, host),
         ])
         .args(&[
             "--label",
@@ -207,5 +226,7 @@ fn main() {
         dbg!(&CONFIG.repository);
         dbg!(CONFIG.port);
     }
-    rocket::ignite().mount("/", routes![index]).launch();
+    rocket::ignite()
+        .mount("/", routes![index, index_with_host_header])
+        .launch();
 }
