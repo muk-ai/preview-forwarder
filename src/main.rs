@@ -62,7 +62,7 @@ fn is_commit_hash_characters(host: String) -> bool {
 }
 
 #[get("/")]
-fn index(host: HostHeader) -> Result<String, status::Custom<String>> {
+fn index_with_host_header(host: HostHeader) -> Result<String, status::Custom<String>> {
     let tag = get_subdomain(host.0.clone())?;
     let image = format!("{}/{}:{}", CONFIG.registry, CONFIG.repository, tag);
     if cfg!(debug_assertions) {
@@ -76,6 +76,11 @@ fn index(host: HostHeader) -> Result<String, status::Custom<String>> {
     }
 
     return docker_run_image(host.0, tag, image);
+}
+
+#[get("/", rank = 2)]
+fn index() -> &'static str {
+    "Could you please specify a docker tag."
 }
 
 fn get_subdomain(host: String) -> Result<String, status::Custom<String>> {
@@ -221,5 +226,7 @@ fn main() {
         dbg!(&CONFIG.repository);
         dbg!(CONFIG.port);
     }
-    rocket::ignite().mount("/", routes![index]).launch();
+    rocket::ignite()
+        .mount("/", routes![index, index_with_host_header])
+        .launch();
 }
