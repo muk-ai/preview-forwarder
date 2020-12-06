@@ -1,8 +1,6 @@
 #![feature(proc_macro_hygiene, decl_macro)]
-use dotenv::dotenv;
-use once_cell::sync::Lazy;
 use std::process::Command;
-use std::{env, process::Output};
+use std::process::Output;
 
 #[macro_use]
 extern crate rocket;
@@ -10,30 +8,8 @@ use rocket::http::Status;
 use rocket::request::{FromRequest, Outcome, Request};
 use rocket::response::status;
 
-#[derive(Debug)]
-struct Config {
-    registry: String,
-    repository: String,
-    port: u16,
-}
-impl Config {
-    fn from_env() -> Config {
-        dotenv().ok();
-        let registry = env::var("DOCKER_REGISTRY")
-            .expect("environment variable DOCKER_REGISTRY is not defined");
-        let repository = env::var("DOCKER_REPOSITORY")
-            .expect("environment variable DOCKER_REPOSITORY is not defined");
-        let port =
-            env::var("DOCKER_PORT").expect("environment variable DOCKER_PORT is not defined");
-        let port: u16 = port.parse().unwrap();
-        Config {
-            registry,
-            repository,
-            port,
-        }
-    }
-}
-static CONFIG: Lazy<Config> = Lazy::new(|| Config::from_env());
+mod config;
+use config::CONFIG;
 
 struct HostHeader(pub String);
 impl<'a, 'r> FromRequest<'a, 'r> for HostHeader {
