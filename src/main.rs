@@ -2,7 +2,6 @@
 
 #[macro_use]
 extern crate rocket;
-use rocket::http::Status;
 use rocket::request::{FromRequest, Outcome, Request};
 use rocket::response::status;
 
@@ -10,6 +9,8 @@ mod config;
 use config::CONFIG;
 mod docker_command;
 use docker_command::{docker_image_inspect, docker_login, docker_pull_image, docker_run_image};
+mod utils;
+use utils::{get_subdomain, is_commit_hash_characters};
 
 struct HostHeader(pub String);
 impl<'a, 'r> FromRequest<'a, 'r> for HostHeader {
@@ -32,11 +33,6 @@ impl<'a, 'r> FromRequest<'a, 'r> for HostHeader {
     }
 }
 
-fn is_commit_hash_characters(host: String) -> bool {
-    host.chars()
-        .all(|c| ('0' <= c && c <= '9') || ('a' <= c && c <= 'f'))
-}
-
 #[get("/")]
 fn index_with_host_header(host: HostHeader) -> Result<String, status::Custom<String>> {
     let tag = get_subdomain(host.0.clone())?;
@@ -57,21 +53,6 @@ fn index_with_host_header(host: HostHeader) -> Result<String, status::Custom<Str
 #[get("/", rank = 2)]
 fn index() -> &'static str {
     "Could you please specify a docker tag."
-}
-
-fn get_subdomain(host: String) -> Result<String, status::Custom<String>> {
-    if cfg!(debug_assertions) {
-        dbg!(&host);
-    }
-
-    let list: Vec<&str> = host.split('.').collect();
-    match list.get(0) {
-        Some(s) => Ok(s.to_string()),
-        None => Err(status::Custom(
-            Status::NotFound,
-            "couldn't find subdomain".to_string(),
-        )),
-    }
 }
 
 fn main() {
