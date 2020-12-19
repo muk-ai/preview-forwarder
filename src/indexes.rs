@@ -1,5 +1,7 @@
 use rocket::request::{FromRequest, Outcome, Request};
 use rocket::response::status;
+use std::thread;
+use std::time::Duration;
 
 use crate::config::CONFIG;
 use crate::docker_command::{
@@ -42,7 +44,9 @@ pub fn index_with_host_header(host: HostHeader) -> Result<String, status::Custom
         return docker_pull_image(&image);
     }
 
-    return docker_run_image(host.0, tag, image);
+    let result = docker_run_image(host.0, tag, image);
+    thread::sleep(Duration::from_secs(3));
+    return result;
 }
 
 #[get("/", rank = 2)]
