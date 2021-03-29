@@ -1,4 +1,5 @@
 use rocket::request::{FromRequest, Outcome, Request};
+use rocket::response::content::Html;
 use rocket::response::status;
 use std::thread;
 use std::time::Duration;
@@ -31,7 +32,7 @@ impl<'a, 'r> FromRequest<'a, 'r> for HostHeader {
 }
 
 #[get("/")]
-pub fn index_with_host_header(host: HostHeader) -> Result<String, status::Custom<String>> {
+pub fn index_with_host_header(host: HostHeader) -> Result<Html<String>, status::Custom<String>> {
     let tag = get_subdomain(host.0.clone())?;
     let image = format!("{}/{}:{}", CONFIG.registry, CONFIG.repository, tag);
     if cfg!(debug_assertions) {

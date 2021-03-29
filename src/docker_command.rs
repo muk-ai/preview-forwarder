@@ -1,4 +1,5 @@
 use rocket::http::Status;
+use rocket::response::content::Html;
 use rocket::response::status;
 use std::process::Command;
 use std::process::Output;
@@ -74,7 +75,7 @@ pub fn docker_login() -> Result<(), status::Custom<String>> {
     Ok(())
 }
 
-pub fn docker_pull_image(image: &String) -> Result<String, status::Custom<String>> {
+pub fn docker_pull_image(image: &String) -> Result<Html<String>, status::Custom<String>> {
     let result = Command::new("docker").args(&["pull", &image]).output();
     let output = match result {
         Ok(o) => o,
@@ -86,7 +87,7 @@ pub fn docker_pull_image(image: &String) -> Result<String, status::Custom<String
         }
     };
     if output.status.success() {
-        return Ok("Image successfully pulled".to_string());
+        return Ok(simple_html("Image successfully pulled"));
     } else {
         let message = format!(
             "docker pull: failed -> {}",
@@ -100,7 +101,7 @@ pub fn docker_run_image(
     host: String,
     tag: String,
     image: String,
-) -> Result<String, status::Custom<String>> {
+) -> Result<Html<String>, status::Custom<String>> {
     let result = Command::new("docker")
         .arg("run")
         .args(&["-p", &CONFIG.port.to_string()])
@@ -117,7 +118,7 @@ pub fn docker_run_image(
         .arg(&image)
         .spawn();
     match result {
-        Ok(_) => Ok("container launched".to_string()),
+        Ok(_) => Ok(reload_html()),
         Err(_) => {
             return Err(status::Custom(
                 Status::InternalServerError,
@@ -125,4 +126,34 @@ pub fn docker_run_image(
             ))
         }
     }
+}
+
+fn reload_html() -> Html<String> {
+    Html(
+        r#"
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <title>reload</title>
+            <script>
+                location.reload();
+            </script>
+        </head>
+        <body>
+        </body>
+        </html>
+        "#
+        .to_string(),
+    )
+}
+
+fn simple_html(s: &str) -> Html<String> {
+    Html(format!(
+        "<html>
+        <head><title>title</title></head>
+        <body>{}</body>
+        </html>",
+        s
+    ))
 }
