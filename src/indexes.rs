@@ -8,7 +8,7 @@ use crate::config::CONFIG;
 use crate::docker_command::{
     docker_image_inspect, docker_login, docker_pull_image, docker_run_image,
 };
-use crate::utils::{get_subdomain, is_commit_hash_characters};
+use crate::utils::{get_subdomain, is_allowed_characters};
 
 pub struct HostHeader(pub String);
 impl<'a, 'r> FromRequest<'a, 'r> for HostHeader {
@@ -18,7 +18,7 @@ impl<'a, 'r> FromRequest<'a, 'r> for HostHeader {
         match request.headers().get_one("Host") {
             Some(host) => match get_subdomain(host.to_string()) {
                 Ok(subdomain) => {
-                    if is_commit_hash_characters(subdomain) {
+                    if is_allowed_characters(subdomain) {
                         Outcome::Success(HostHeader(host.to_string()))
                     } else {
                         Outcome::Forward(())

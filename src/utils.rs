@@ -1,9 +1,9 @@
 use rocket::http::Status;
 use rocket::response::status;
 
-pub fn is_commit_hash_characters(host: String) -> bool {
+pub fn is_allowed_characters(host: String) -> bool {
     host.chars()
-        .all(|c| ('0' <= c && c <= '9') || ('a' <= c && c <= 'f'))
+        .all(|c| ('0' <= c && c <= '9') || ('a' <= c && c <= 'f') || c == '-')
 }
 
 pub fn get_subdomain(host: String) -> Result<String, status::Custom<String>> {
